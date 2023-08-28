@@ -84,6 +84,7 @@ async function getFullVersion(versionShort, solcListURL) {
 }
 
 // Detect if the contract might be using upgradeability features
+// It's just a basic detection based on keywords; this can be made more sophisticated
 const detectUpgradeable = (contractSource) => {
   return (
     /delegatecall/.test(contractSource) ||
