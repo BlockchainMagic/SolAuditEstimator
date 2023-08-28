@@ -46,3 +46,9 @@
 ## **Return**:
 
 - Return the total estimated audit time.
+
+## **Usage**:
+
+```shell
+node contract_estimator.js <full path to contract code> [--optimizer-runs <number of optimizer runs>]`
+```
