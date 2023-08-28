@@ -61,8 +61,17 @@ const getSolidityVersion = (contractSource) => {
   return versionMatch && versionMatch[1];
 };
 
-// Retrieve the full version of the Solidity compiler for the contract
+// Introducing cache for Solidity versions
+const solidityVersionCache = {};
+
+// Retrieve the full version of the Solidity compiler for the contract with caching
 async function getFullVersion(versionShort, solcListURL) {
+  // Use cached value if exists
+  if (solidityVersionCache[versionShort]) {
+    console.log(`Using cached version for Solidity ${versionShort}...`);
+    return Promise.resolve(solidityVersionCache[versionShort]);
+  }
+
   console.log(`Resolving full version for Solidity ${versionShort}...`);
   return new Promise((resolve, reject) => {
     https
@@ -74,9 +83,14 @@ async function getFullVersion(versionShort, solcListURL) {
         res.on("end", () => {
           const list = JSON.parse(data);
           const version = list.releases[versionShort];
-          resolve(
-            version ? version.replace("soljson-", "").replace(".js", "") : null
-          );
+          const fullVersion = version
+            ? version.replace("soljson-", "").replace(".js", "")
+            : null;
+
+          // Cache the result
+          solidityVersionCache[versionShort] = fullVersion;
+
+          resolve(fullVersion);
         });
       })
       .on("error", reject);
