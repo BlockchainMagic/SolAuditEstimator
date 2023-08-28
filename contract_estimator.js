@@ -186,7 +186,7 @@ const getEstimate = async (
 
     console.log(
       "\n\n----------------------------------\n",
-      `Total stimated audit time: ${
+      `Total estimated audit time: ${
         baseTime + complexityTime + upgradeabilityComplexityTime
       } hours`,
       "\n----------------------------------\n"
