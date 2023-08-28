@@ -19,7 +19,8 @@ const config = {
     functionTime: 0.5,
     baseFunctionCount: 10,
     externalCallTime: 2,
-    importTime: 5,
+    importTimePerImport: 3,
+    importTimeFlatRate: 5,
     assemblyTime: 3,
     upgradeability: {
       proxyPattern: 3,
@@ -107,6 +108,77 @@ const detectUpgradeable = (contractSource) => {
   );
 };
 
+const calculateBaseTime = (lines) => {
+  if (lines <= config.sizeThresholds.small) return config.baseTimes.small;
+  if (lines <= config.sizeThresholds.medium) return config.baseTimes.medium;
+  return config.baseTimes.large;
+};
+
+const calculateComplexityTime = (
+  contractSource,
+  compiledContract,
+  countImports
+) => {
+  let complexityTime = 0;
+  for (const contractName in compiledContract) {
+    const funcs = compiledContract[contractName].abi.filter(
+      (item) => item.type === "function"
+    );
+    complexityTime +=
+      config.complexityFactors.functionTime *
+      Math.max(funcs.length - config.complexityFactors.baseFunctionCount, 0);
+    complexityTime +=
+      config.complexityFactors.externalCallTime *
+      (contractSource.match(/\.call\(/g) || []).length;
+
+    const importMatches = contractSource.match(/import/g) || [];
+    if (countImports) {
+      complexityTime +=
+        config.complexityFactors.importTimePerImport * importMatches.length;
+    } else {
+      complexityTime += config.complexityFactors.importTimeFlatRate;
+    }
+
+    if (/assembly/.test(contractSource))
+      complexityTime += config.complexityFactors.assemblyTime;
+  }
+  return complexityTime;
+};
+
+const estimateUpgradeabilityComplexity = (contractSource) => {
+  if (!detectUpgradeable(contractSource)) return 0;
+
+  const factors = config.complexityFactors.upgradeability;
+  return Object.values(factors).reduce((acc, val) => acc + val, 0);
+};
+
+const compileContract = (
+  contractSource,
+  solidityVersionFull,
+  optimizerRuns
+) => {
+  return new Promise((resolve, reject) => {
+    solc.loadRemoteVersion(solidityVersionFull, (err, solcV) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      const input = {
+        language: "Solidity",
+        sources: { "contract.sol": { content: contractSource } },
+        settings: {
+          optimizer: { enabled: optimizerRuns > 0, runs: optimizerRuns },
+          outputSelection: { "*": { "*": ["*"] } },
+        },
+      };
+      const output = solcV.compile(JSON.stringify(input), {
+        import: findImports,
+      });
+      resolve(JSON.parse(output));
+    });
+  });
+};
+
 // Estimate the audit time for the contract
 const getEstimate = async (
   contractSourcePath,
@@ -121,97 +193,45 @@ const getEstimate = async (
     solcListURL
   );
 
-  console.log(`Downloading solc version ${solidityVersionFull}...`);
-
-  const input = {
-    language: "Solidity",
-    sources: { "contract.sol": { content: contractSource } },
-    settings: {
-      optimizer: { enabled: optimizerRuns > 0, runs: optimizerRuns },
-      outputSelection: { "*": { "*": ["*"] } },
-    },
-  };
-
-  console.log(`Compiling with optimizer runs: ${optimizerRuns}`);
-
-  solc.loadRemoteVersion(solidityVersionFull, (err, solcV) => {
-    if (err) {
-      console.error(
-        `Error loading remote compiler version: ${solidityVersionFull}`,
-        err
-      );
-      process.exit(1);
-    }
-
-    const output = solcV.compile(JSON.stringify(input), {
-      import: findImports,
-    });
-    const compiledOutput = JSON.parse(output);
-
-    if (compiledOutput.errors && compiledOutput.errors.length > 0) {
-      console.error("Compilation errors found:");
-      compiledOutput.errors.forEach((error) =>
-        console.error(error.formattedMessage)
-      );
-      process.exit(1);
-    }
-
-    const lines = contractSource.split("\n").length;
-    let baseTime =
-      lines <= config.sizeThresholds.small
-        ? config.baseTimes.small
-        : lines <= config.sizeThresholds.medium
-        ? config.baseTimes.medium
-        : config.baseTimes.large;
-
-    let complexityTime = 0;
-    for (const contractName in compiledOutput.contracts["contract.sol"]) {
-      const funcs = compiledOutput.contracts["contract.sol"][
-        contractName
-      ].abi.filter((item) => item.type === "function");
-      complexityTime +=
-        config.complexityFactors.functionTime *
-        Math.max(funcs.length - config.complexityFactors.baseFunctionCount, 0);
-      complexityTime +=
-        config.complexityFactors.externalCallTime *
-        (contractSource.match(/\.call\(/g) || []).length;
-      const importMatches = contractSource.match(/import/g) || [];
-      if (countImports) {
-        complexityTime +=
-          config.complexityFactors.importTime * importMatches.length;
-      } else if (importMatches.length > 0) {
-        complexityTime += config.complexityFactors.importTime;
-      }
-      if (/assembly/.test(contractSource))
-        complexityTime += config.complexityFactors.assemblyTime;
-    }
-
-    let upgradeabilityComplexityTime = 0;
-    if (detectUpgradeable(contractSource)) {
-      console.log("Detected potential upgradeable patterns in the contract.");
-      const factors = config.complexityFactors.upgradeability;
-      for (const factor in factors) {
-        upgradeabilityComplexityTime += factors[factor];
-      }
-    }
-
-    console.log("\n----------------------------------");
-    console.log("Estimated audit time breakdown:");
-    console.log("----------------------------------\n");
-    console.log(`- Base Time: ${baseTime} hours`);
-    console.log(`- Complexity Time: ${complexityTime} hours`);
-    console.log(
-      `- Upgradeability Complexity Time: ${upgradeabilityComplexityTime} hours`
+  const compiledOutput = await compileContract(
+    contractSource,
+    solidityVersionFull,
+    optimizerRuns
+  );
+  if (compiledOutput.errors && compiledOutput.errors.length > 0) {
+    console.error(
+      "Compilation errors found:",
+      compiledOutput.errors.map((err) => err.formattedMessage)
     );
+    process.exit(1);
+  }
 
-    console.log(
-      "\n\n----------------------------------\n",
-      `Total estimated audit time: ${
-        baseTime + complexityTime + upgradeabilityComplexityTime
-      } hours`,
-      "\n----------------------------------\n"
-    );
-  });
+  const lines = contractSource.split("\n").length;
+  const baseTime = calculateBaseTime(lines);
+  const complexityTime = calculateComplexityTime(
+    contractSource,
+    compiledOutput.contracts["contract.sol"],
+    countImports
+  );
+
+  const upgradeabilityComplexityTime =
+    estimateUpgradeabilityComplexity(contractSource);
+
+  console.log("\n----------------------------------");
+  console.log("Estimated audit time breakdown:");
+  console.log("----------------------------------\n");
+  console.log(`- Base Time: ${baseTime} hours`);
+  console.log(`- Complexity Time: ${complexityTime} hours`);
+  console.log(
+    `- Upgradeability Complexity Time: ${upgradeabilityComplexityTime} hours`
+  );
+  console.log(
+    "\n\n----------------------------------\n",
+    `Total estimated audit time: ${
+      baseTime + complexityTime + upgradeabilityComplexityTime
+    } hours`,
+    "\n----------------------------------\n"
+  );
 };
 
 // Setting up command line arguments and options
