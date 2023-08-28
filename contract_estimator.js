@@ -20,10 +20,16 @@ const config = {
     externalCallTime: 2,
     importTime: 5,
     assemblyTime: 3,
+    upgradeability: {
+      proxyPattern: 3,
+      storageLayout: 5,
+      adminRights: 2,
+      initialization: 2,
+      interContractConsistency: 4,
+    },
   },
 };
 
-// Find and return the content of imported files
 const findImports = (importPath) => {
   const openzeppelinBasePath = "./node_modules/@openzeppelin/";
   let fullPath;
@@ -34,7 +40,6 @@ const findImports = (importPath) => {
       importPath.replace("@openzeppelin/", "")
     );
   } else {
-    // Add handling for other libraries or local files if needed
     fullPath = importPath;
   }
 
@@ -65,128 +70,103 @@ async function getFullVersion(versionShort, solcListURL) {
 
         res.on("end", () => {
           const list = JSON.parse(data);
-          let version = list.releases[versionShort];
-          if (version) {
-            version = version
-              .replace(".js", "") // remove .js extension
-              .replace("soljson-", ""); // remove soljson- prefix
-            resolve(version);
-          } else {
-            resolve(null);
-          }
+          const version = list.releases[versionShort];
+          resolve(
+            version ? version.replace("soljson-", "").replace(".js", "") : null
+          );
         });
       })
-      .on("error", (err) => {
-        reject(err);
-      });
+      .on("error", reject);
   });
 }
+
+const detectUpgradeable = (contractSource) => {
+  return (
+    /delegatecall/.test(contractSource) ||
+    /proxy/.test(contractSource) ||
+    /initialize/.test(contractSource)
+  );
+};
 
 const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
   const contractSource = fs.readFileSync(contractSourcePath, "utf8");
   const solidityVersionShort = getSolidityVersion(contractSource);
-
-  if (!solidityVersionShort) {
-    console.error("Could not determine Solidity version from contract source.");
-    process.exit(1);
-  }
-
   const solidityVersionFull = await getFullVersion(
     solidityVersionShort,
     solcListURL
   );
-  if (!solidityVersionFull) {
-    console.error(
-      `Couldn't find a matching full version for ${solidityVersionShort}`
-    );
-    process.exit(1);
-  }
 
   const input = {
     language: "Solidity",
-    sources: {
-      "contract.sol": {
-        content: contractSource,
-      },
-    },
+    sources: { "contract.sol": { content: contractSource } },
     settings: {
-      optimizer: {
-        enabled: optimizerRuns > 0, // Enable optimizer if runs is greater than 0
-        runs: optimizerRuns,
-      },
-      outputSelection: {
-        "*": {
-          "*": ["*"],
-        },
-      },
+      optimizer: { enabled: optimizerRuns > 0, runs: optimizerRuns },
+      outputSelection: { "*": { "*": ["*"] } },
     },
   };
 
   solc.loadRemoteVersion(solidityVersionFull, (err, solcV) => {
     if (err) {
       console.error(
-        `Error loading remote compiler version: (${solidityVersionFull})`,
+        `Error loading remote compiler version: ${solidityVersionFull}`,
         err
       );
       process.exit(1);
-    } else {
-      const output = solcV.compile(JSON.stringify(input), {
-        import: findImports,
-      });
-      const compiledOutput = JSON.parse(output);
-
-      if (compiledOutput.errors && compiledOutput.errors.length > 0) {
-        console.error("Compilation errors found:");
-        compiledOutput.errors.forEach((error) =>
-          console.error(error.formattedMessage)
-        );
-        process.exit(1);
-      }
-
-      // Size estimation
-      const lines = contractSource.split("\n").length;
-      let baseTime;
-
-      switch (true) {
-        case lines <= config.sizeThresholds.small:
-          baseTime = config.baseTimes.small;
-          break;
-        case lines <= config.sizeThresholds.medium:
-          baseTime = config.baseTimes.medium;
-          break;
-        default:
-          baseTime = config.baseTimes.large;
-      }
-
-      // Complexity estimation
-      let complexityTime = 0;
-
-      for (const contractName in compiledOutput.contracts["contract.sol"]) {
-        const funcs = compiledOutput.contracts["contract.sol"][
-          contractName
-        ].abi.filter((item) => item.type === "function");
-        complexityTime +=
-          config.complexityFactors.functionTime *
-          Math.max(
-            funcs.length - config.complexityFactors.baseFunctionCount,
-            0
-          );
-
-        const externalCalls = contractSource.match(/\.call\(/g) || [];
-        complexityTime +=
-          config.complexityFactors.externalCallTime * externalCalls.length;
-
-        if (/import/.test(contractSource)) {
-          complexityTime += config.complexityFactors.importTime;
-        }
-
-        if (/assembly/.test(contractSource)) {
-          complexityTime += config.complexityFactors.assemblyTime;
-        }
-      }
-
-      console.log(`Estimated audit time: ${baseTime + complexityTime} hours`);
     }
+
+    const output = solcV.compile(JSON.stringify(input), {
+      import: findImports,
+    });
+    const compiledOutput = JSON.parse(output);
+
+    if (compiledOutput.errors && compiledOutput.errors.length > 0) {
+      compiledOutput.errors.forEach((error) =>
+        console.error(error.formattedMessage)
+      );
+      process.exit(1);
+    }
+
+    const lines = contractSource.split("\n").length;
+    let baseTime =
+      lines <= config.sizeThresholds.small
+        ? config.baseTimes.small
+        : lines <= config.sizeThresholds.medium
+        ? config.baseTimes.medium
+        : config.baseTimes.large;
+
+    let complexityTime = 0;
+    for (const contractName in compiledOutput.contracts["contract.sol"]) {
+      const funcs = compiledOutput.contracts["contract.sol"][
+        contractName
+      ].abi.filter((item) => item.type === "function");
+
+      complexityTime +=
+        config.complexityFactors.functionTime *
+        Math.max(funcs.length - config.complexityFactors.baseFunctionCount, 0);
+
+      complexityTime +=
+        config.complexityFactors.externalCallTime *
+        (contractSource.match(/\.call\(/g) || []).length;
+
+      if (/import/.test(contractSource))
+        complexityTime += config.complexityFactors.importTime;
+      if (/assembly/.test(contractSource))
+        complexityTime += config.complexityFactors.assemblyTime;
+    }
+
+    let upgradeabilityComplexityTime = 0;
+    if (detectUpgradeable(contractSource)) {
+      const factors = config.complexityFactors.upgradeability;
+      for (const factor in factors) {
+        upgradeabilityComplexityTime += factors[factor];
+      }
+    }
+
+    console.log(
+      `Estimated audit time: ${
+        baseTime + complexityTime + upgradeabilityComplexityTime
+      } hours`
+    );
   });
 };
 
@@ -210,6 +190,4 @@ program
   })
   .parse(process.argv);
 
-if (!program.args.length) {
-  program.help(); // Display help info if no arguments provided
-}
+if (!program.args.length) program.help();
