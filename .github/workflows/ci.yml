@@ -30,8 +30,8 @@ jobs:
     - name: Run tests
       run: npm test
 
-    - name: Report test results
-      if: always()
-      uses: mikepenz/action-junit-report@v3
-      with:
-        report_paths: 'junit.xml'
+    # - name: Report test results
+    #   if: always()
+    #   uses: mikepenz/action-junit-report@v3
+    #   with:
+    #     report_paths: 'junit.xml'
