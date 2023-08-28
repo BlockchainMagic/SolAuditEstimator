@@ -2,6 +2,7 @@ const fs = require("fs");
 const solc = require("solc");
 const https = require("https");
 const { program } = require("commander");
+const path = require("path");
 
 const config = {
   sizeThresholds: {
@@ -20,6 +21,29 @@ const config = {
     importTime: 5,
     assemblyTime: 3,
   },
+};
+
+// Find and return the content of imported files
+const findImports = (importPath) => {
+  const openzeppelinBasePath = "./node_modules/@openzeppelin/";
+  let fullPath;
+
+  if (importPath.startsWith("@openzeppelin")) {
+    fullPath = path.join(
+      openzeppelinBasePath,
+      importPath.replace("@openzeppelin/", "")
+    );
+  } else {
+    // Add handling for other libraries or local files if needed
+    fullPath = importPath;
+  }
+
+  try {
+    return { contents: fs.readFileSync(fullPath, "utf8") };
+  } catch (err) {
+    console.error(`Error reading ${fullPath}:`, err);
+    return { error: `Error reading ${fullPath}` };
+  }
 };
 
 const getSolidityVersion = (contractSource) => {
@@ -102,7 +126,9 @@ const getEstimate = async (contractSourcePath, solcListURL) => {
       );
       process.exit(1);
     } else {
-      const output = solcV.compile(JSON.stringify(input));
+      const output = solcV.compile(JSON.stringify(input), {
+        import: findImports,
+      });
       const compiledOutput = JSON.parse(output);
 
       if (compiledOutput.errors && compiledOutput.errors.length > 0) {
