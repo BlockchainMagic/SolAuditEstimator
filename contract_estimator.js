@@ -4,6 +4,7 @@ const https = require("https");
 const { program } = require("commander");
 const path = require("path");
 
+// Configuration constants for determining the audit time
 const config = {
   sizeThresholds: {
     small: 200,
@@ -30,6 +31,7 @@ const config = {
   },
 };
 
+// Function to resolve imports within Solidity files
 const findImports = (importPath) => {
   const openzeppelinBasePath = "./node_modules/@openzeppelin/";
   let fullPath;
@@ -51,6 +53,7 @@ const findImports = (importPath) => {
   }
 };
 
+// Extract the Solidity version from the contract source
 const getSolidityVersion = (contractSource) => {
   const versionMatch = contractSource.match(
     /^pragma solidity (\^?\d+\.\d+\.\d+);/m
@@ -58,16 +61,16 @@ const getSolidityVersion = (contractSource) => {
   return versionMatch && versionMatch[1];
 };
 
+// Retrieve the full version of the Solidity compiler for the contract
 async function getFullVersion(versionShort, solcListURL) {
+  console.log(`Resolving full version for Solidity ${versionShort}...`);
   return new Promise((resolve, reject) => {
     https
       .get(solcListURL, (res) => {
         let data = "";
-
         res.on("data", (chunk) => {
           data += chunk;
         });
-
         res.on("end", () => {
           const list = JSON.parse(data);
           const version = list.releases[versionShort];
@@ -80,6 +83,7 @@ async function getFullVersion(versionShort, solcListURL) {
   });
 }
 
+// Detect if the contract might be using upgradeability features
 const detectUpgradeable = (contractSource) => {
   return (
     /delegatecall/.test(contractSource) ||
@@ -88,6 +92,7 @@ const detectUpgradeable = (contractSource) => {
   );
 };
 
+// Estimate the audit time for the contract
 const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
   const contractSource = fs.readFileSync(contractSourcePath, "utf8");
   const solidityVersionShort = getSolidityVersion(contractSource);
@@ -95,6 +100,8 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
     solidityVersionShort,
     solcListURL
   );
+
+  console.log(`Downloading solc version ${solidityVersionFull}...`);
 
   const input = {
     language: "Solidity",
@@ -104,6 +111,8 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
       outputSelection: { "*": { "*": ["*"] } },
     },
   };
+
+  console.log(`Compiling with optimizer runs: ${optimizerRuns}`);
 
   solc.loadRemoteVersion(solidityVersionFull, (err, solcV) => {
     if (err) {
@@ -120,6 +129,7 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
     const compiledOutput = JSON.parse(output);
 
     if (compiledOutput.errors && compiledOutput.errors.length > 0) {
+      console.error("Compilation errors found:");
       compiledOutput.errors.forEach((error) =>
         console.error(error.formattedMessage)
       );
@@ -139,15 +149,12 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
       const funcs = compiledOutput.contracts["contract.sol"][
         contractName
       ].abi.filter((item) => item.type === "function");
-
       complexityTime +=
         config.complexityFactors.functionTime *
         Math.max(funcs.length - config.complexityFactors.baseFunctionCount, 0);
-
       complexityTime +=
         config.complexityFactors.externalCallTime *
         (contractSource.match(/\.call\(/g) || []).length;
-
       if (/import/.test(contractSource))
         complexityTime += config.complexityFactors.importTime;
       if (/assembly/.test(contractSource))
@@ -156,6 +163,7 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
 
     let upgradeabilityComplexityTime = 0;
     if (detectUpgradeable(contractSource)) {
+      console.log("Detected potential upgradeable patterns in the contract.");
       const factors = config.complexityFactors.upgradeability;
       for (const factor in factors) {
         upgradeabilityComplexityTime += factors[factor];
@@ -163,13 +171,16 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
     }
 
     console.log(
+      "\n\n----------------------------------\n",
       `Estimated audit time: ${
         baseTime + complexityTime + upgradeabilityComplexityTime
-      } hours`
+      } hours`,
+      "\n----------------------------------\n"
     );
   });
 };
 
+// Setting up command line arguments and options
 program
   .version("1.0.0")
   .description("Estimate the audit time for a Solidity contract.")
@@ -190,4 +201,5 @@ program
   })
   .parse(process.argv);
 
+// Display help if no arguments provided
 if (!program.args.length) program.help();
