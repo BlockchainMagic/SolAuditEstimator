@@ -93,7 +93,12 @@ const detectUpgradeable = (contractSource) => {
 };
 
 // Estimate the audit time for the contract
-const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
+const getEstimate = async (
+  contractSourcePath,
+  solcListURL,
+  optimizerRuns,
+  debug
+) => {
   const contractSource = fs.readFileSync(contractSourcePath, "utf8");
   const solidityVersionShort = getSolidityVersion(contractSource);
   const solidityVersionFull = await getFullVersion(
@@ -170,9 +175,18 @@ const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
       }
     }
 
+    console.log("\n----------------------------------");
+    console.log("Estimated audit time breakdown:");
+    console.log("----------------------------------\n");
+    console.log(`- Base Time: ${baseTime} hours`);
+    console.log(`- Complexity Time: ${complexityTime} hours`);
+    console.log(
+      `- Upgradeability Complexity Time: ${upgradeabilityComplexityTime} hours`
+    );
+
     console.log(
       "\n\n----------------------------------\n",
-      `Estimated audit time: ${
+      `Total stimated audit time: ${
         baseTime + complexityTime + upgradeabilityComplexityTime
       } hours`,
       "\n----------------------------------\n"
@@ -196,6 +210,7 @@ program
     parseInt,
     0
   )
+
   .action((contractSourcePath, cmdObj) => {
     getEstimate(contractSourcePath, cmdObj.solcListUrl, cmdObj.optimizerRuns);
   })
