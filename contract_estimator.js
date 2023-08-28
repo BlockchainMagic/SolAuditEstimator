@@ -98,7 +98,7 @@ const getEstimate = async (
   contractSourcePath,
   solcListURL,
   optimizerRuns,
-  debug
+  countImports
 ) => {
   const contractSource = fs.readFileSync(contractSourcePath, "utf8");
   const solidityVersionShort = getSolidityVersion(contractSource);
@@ -161,8 +161,13 @@ const getEstimate = async (
       complexityTime +=
         config.complexityFactors.externalCallTime *
         (contractSource.match(/\.call\(/g) || []).length;
-      if (/import/.test(contractSource))
+      const importMatches = contractSource.match(/import/g) || [];
+      if (countImports) {
+        complexityTime +=
+          config.complexityFactors.importTime * importMatches.length;
+      } else if (importMatches.length > 0) {
         complexityTime += config.complexityFactors.importTime;
+      }
       if (/assembly/.test(contractSource))
         complexityTime += config.complexityFactors.assemblyTime;
     }
@@ -206,6 +211,11 @@ program
     "https://solc-bin.ethereum.org/bin/list.json"
   )
   .option(
+    "--count-imports",
+    "Flag to count each import individually for time estimation. By default, a flat rate is used for any number of imports.",
+    false
+  )
+  .option(
     "--optimizer-runs <number>",
     "Number of optimizer runs. Set to 0 to disable.",
     parseInt,
@@ -213,7 +223,12 @@ program
   )
 
   .action((contractSourcePath, cmdObj) => {
-    getEstimate(contractSourcePath, cmdObj.solcListUrl, cmdObj.optimizerRuns);
+    getEstimate(
+      contractSourcePath,
+      cmdObj.solcListUrl,
+      cmdObj.optimizerRuns,
+      cmdObj.countImports
+    );
   })
   .parse(process.argv);
 
