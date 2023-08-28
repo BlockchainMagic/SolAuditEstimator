@@ -1,5 +1,7 @@
 # SolAuditEstimator: Audit Time Estimation Algorithm
 
+[![CI Workflow](https://github.com/BlockchainMagic/SolAuditEstimator/actions/workflows/ci.yml/badge.svg)](https://github.com/BlockchainMagic/SolAuditEstimator/actions)
+
 ## **Input**:
 
 - Smart contract code
