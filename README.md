@@ -1,4 +1,4 @@
-# Audit Time Estimation Algorithm
+# SolAuditEstimator: Audit Time Estimation Algorithm
 
 ## **Input**:
 
@@ -23,6 +23,7 @@
 - Identify and count external calls.
 - Detect if the contract interacts with other contracts (e.g., using interface or `import`).
 - Check for advanced Solidity features, such as `assembly` blocks.
+- Determine if the contract is upgradeable.
 
 ### 3. **Estimate Base Audit Time**:
 
@@ -36,6 +37,7 @@
 - Add 2 hours for every external call detected.
 - If other contracts are interacted with, add 5 hours.
 - For every detected advanced Solidity feature, add 3 hours.
+- If the contract is upgradeable, adjust accordingly (considering factors such as proxy patterns, data migration, and administrative functions).
 
 ### 5. **Compile and Report**:
 
