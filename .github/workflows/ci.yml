@@ -1,12 +1,12 @@
-name: Node.js CI
+name: SolAuditEstimator CI
 
 on:
   push:
     branches:
-      - main  # Change to 'master' if your default branch is named 'master'
+      - main
   pull_request:
     branches:
-      - main  # Change to 'master' if your default branch is named 'master'
+      - main  
 
 jobs:
   build:
@@ -24,11 +24,11 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
 
-    - name: Install pnpm
-      run: npm install -g pnpm
+    - name: Install dependencies
+      run: npm ci
 
     - name: Run tests
-      run: pnpm test
+      run: npm test
 
     - name: Report test results
       if: always()
