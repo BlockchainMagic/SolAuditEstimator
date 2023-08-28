@@ -50,5 +50,5 @@
 ## **Usage**:
 
 ```shell
-node contract_estimator.js <full path to contract code> [--optimizer-runs <number of optimizer runs>]`
+node contract_estimator.js <full path to contract code> [--optimizer-runs <number of optimizer runs>]
 ```
