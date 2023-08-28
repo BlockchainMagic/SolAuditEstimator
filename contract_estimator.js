@@ -211,12 +211,12 @@ program
     "https://solc-bin.ethereum.org/bin/list.json"
   )
   .option(
-    "--count-imports",
+    "-c, --count-imports",
     "Flag to count each import individually for time estimation. By default, a flat rate is used for any number of imports.",
     false
   )
   .option(
-    "--optimizer-runs <number>",
+    "-o, --optimizer-runs <number>",
     "Number of optimizer runs. Set to 0 to disable.",
     parseInt,
     0
