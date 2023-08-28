@@ -82,7 +82,7 @@ async function getFullVersion(versionShort, solcListURL) {
   });
 }
 
-const getEstimate = async (contractSourcePath, solcListURL) => {
+const getEstimate = async (contractSourcePath, solcListURL, optimizerRuns) => {
   const contractSource = fs.readFileSync(contractSourcePath, "utf8");
   const solidityVersionShort = getSolidityVersion(contractSource);
 
@@ -110,6 +110,10 @@ const getEstimate = async (contractSourcePath, solcListURL) => {
       },
     },
     settings: {
+      optimizer: {
+        enabled: optimizerRuns > 0, // Enable optimizer if runs is greater than 0
+        runs: optimizerRuns,
+      },
       outputSelection: {
         "*": {
           "*": ["*"],
@@ -195,8 +199,14 @@ program
     "URL to the solc binary list",
     "https://solc-bin.ethereum.org/bin/list.json"
   )
+  .option(
+    "--optimizer-runs <number>",
+    "Number of optimizer runs. Set to 0 to disable.",
+    parseInt,
+    0
+  )
   .action((contractSourcePath, cmdObj) => {
-    getEstimate(contractSourcePath, cmdObj.solcListUrl);
+    getEstimate(contractSourcePath, cmdObj.solcListUrl, cmdObj.optimizerRuns);
   })
   .parse(process.argv);
 
