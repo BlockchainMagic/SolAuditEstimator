@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x, 16.x, 18.x]  # You can specify more versions if needed
+        node-version: [18.x]  # You can specify more versions if needed
 
     steps:
     - name: Checkout repository
