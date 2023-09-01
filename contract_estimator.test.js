@@ -10,11 +10,35 @@ const {
   estimateUpgradeabilityComplexity,
   compileContract,
   getFullVersion,
+  loadConfigFromFile,
 } = require("./lib/auditEstimator");
 
 jest.mock("fs");
 jest.mock("https", () => {
   return { get: jest.fn() };
+});
+
+describe("Configuration loading", () => {
+  it("throws an error if the config file does not exist", () => {
+    fs.readFileSync.mockImplementationOnce(() => {
+      throw new Error("File not found");
+    });
+
+    expect(() => {
+      loadConfigFromFile("path/to/nonexistent.json");
+    }).toThrow(
+      "Error loading external config from path/to/nonexistent.json: Error: File not found"
+    );
+  });
+
+  it("successfully loads the config if the config file exists", () => {
+    const mockConfig = JSON.stringify({ key: "value" });
+    fs.readFileSync.mockImplementationOnce(() => mockConfig);
+
+    const config = loadConfigFromFile("path/to/existent.json");
+
+    expect(config).toEqual({ key: "value" });
+  });
 });
 
 describe("Estimate audit time", () => {
