@@ -11,7 +11,7 @@ program
     "https://solc-bin.ethereum.org/bin/list.json"
   )
   .option(
-    "-c, --count-imports",
+    "-i, --count-imports",
     "Flag to count each import individually for time estimation. By default, a flat rate is used for any number of imports.",
     false
   )
@@ -21,8 +21,10 @@ program
     parseInt,
     0
   )
+  .option("-c, --config <path>", "Path to external JSON config file")
   .action((contractSourcePath, cmdObj) => {
     getEstimate(
+      cmdObj.config,
       contractSourcePath,
       cmdObj.solcListUrl,
       cmdObj.optimizerRuns,
