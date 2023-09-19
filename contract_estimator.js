@@ -23,13 +23,13 @@ program
   )
   .option("-c, --config <path>", "Path to external JSON config file")
   .action((contractSourcePath, cmdObj) => {
-    getEstimate(
-      cmdObj.config,
+    getEstimate({
+      configPath: cmdObj.config,
       contractSourcePath,
-      cmdObj.solcListUrl,
-      cmdObj.optimizerRuns,
-      cmdObj.countImports
-    );
+      solcListURL: cmdObj.solcListUrl,
+      optimizerRuns: cmdObj.optimizerRuns,
+      countImports: cmdObj.countImports,
+    });
   })
   .parse(process.argv);
 

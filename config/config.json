@@ -1,0 +1,26 @@
+{
+  "sizeThresholds": {
+    "small": 200,
+    "medium": 1000
+  },
+  "baseTimes": {
+    "small": 5,
+    "medium": 20,
+    "large": 500
+  },
+  "complexityFactors": {
+    "functionTime": 0.5,
+    "baseFunctionCount": 10,
+    "externalCallTime": 2,
+    "importTimePerImport": 3,
+    "importTimeFlatRate": 5,
+    "assemblyTime": 3,
+    "upgradeability": {
+      "proxyPattern": 3,
+      "storageLayout": 5,
+      "adminRights": 2,
+      "initialization": 2,
+      "interContractConsistency": 4
+    }
+  }
+}
